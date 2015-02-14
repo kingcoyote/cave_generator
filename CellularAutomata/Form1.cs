@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Algorithms;
 
 /**
  * 1 - Generate all water grid
@@ -23,12 +24,23 @@ namespace CellularAutomata
 {
     public partial class Form1 : Form
     {
-        private Color[,] _grid = new Color[128,128];
+        public int ConnectingThreshold = 25;
+        public int TunnelSize = 6;
+        public float TunnelPersistance = 0.8f;
+        public float WaterMinimum = 0.33f;
+
+        private float _water;
+        private static Color[,] _grid = new Color[128,128];
+        private static int _gridSize;
         private Random _rng;
         private Timer _timer;
         private List<CaveRules> _rules;
         private int _currentRule;
         private int _currentPass;
+        private QuickUnion _qu;
+        private List<ContiguousRegion> _regions;
+        private ContiguousRegion _mainRegion;
+        private ContiguousRegion _mergableRegion;
         
         public Form1()
         {
@@ -117,7 +129,17 @@ namespace CellularAutomata
 
             if (_currentRule == _rules.Count - 1 && _currentPass >= _rules[_currentRule].Iterations)
             {
+                _gridSize = _rules[_currentRule].GridSize;
                 DefineConnectedComponents();
+                SortContiguousRegions();
+                MergeNearbyRegions();
+                _grid = GenerateGrid(_grid, _rules[_currentRule].GridSize, _rules[_currentRule].NeighborhoodSize,
+                                 _rules[_currentRule].NeighborhoodThreshold);
+                DefineConnectedComponents();
+                SortContiguousRegions();
+                RejectIsolatedRegions();
+                CalculateWater();
+                MarkAcceptance();
             };
             
             picOutput.Refresh();
@@ -149,7 +171,122 @@ namespace CellularAutomata
 
         private void DefineConnectedComponents()
         {
-            Console.WriteLine("defining connected components");
+            var gridSize = _rules[_currentRule].GridSize;
+            _qu = new QuickUnion(gridSize*gridSize);
+            for (var i = 0; i < gridSize; i++)
+            {
+                for (var j = 0; j < gridSize; j++)
+                {
+                    if (_grid[i, j] == Color.SaddleBrown) continue;
+
+                    for (var k = -1; k <= 1; k++)
+                    {
+                        for (var l = -1; l <= 1; l++)
+                        {
+                            if (i + k < 0 || i + k >= gridSize || j + l < 0 || j + l >= gridSize || (k == 0 && l == 0)) continue;
+                            if (_grid[i + k, j + l] == Color.Aquamarine) _qu.Union(j*gridSize + i, (j+l) * gridSize + i+k);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void SortContiguousRegions()
+        {
+            var gridSize = _rules[_currentRule].GridSize;
+            var r = new Dictionary<int, ContiguousRegion>();
+
+            for (var i = 0; i < gridSize * gridSize; i++)
+            {
+                if (r.ContainsKey(_qu.Find(i)) || _grid[i % 256, i / gridSize] == Color.SaddleBrown) continue;
+                r.Add(_qu.Find(i), new ContiguousRegion() { Index = _qu.Find(i), Size = _qu.Size(i) });
+            }
+
+            var pq = new PriorityQueue<ContiguousRegion>(r.Count);
+
+            foreach (var cr in r.Values)
+            {
+                pq.Insert(cr);
+            }
+
+            _mainRegion = pq.DelMin();
+
+            _regions = new List<ContiguousRegion>();
+
+            while (!pq.IsEmpty())
+            {
+                _regions.Add(pq.DelMin());
+            }
+        }
+
+        private void MergeNearbyRegions()
+        {
+            while (MergeableRegionExists())
+            {
+                CombineRegions(_mainRegion, _mergableRegion);
+            }
+        }
+
+        private bool MergeableRegionExists()
+        {
+            foreach (var region in _regions)
+            {
+                int pathLength = 0;
+                var path = AStar.GeneratePath(
+                    new PathFinder(_mainRegion.Index % _gridSize, _mainRegion.Index / _gridSize), 
+                    new PathFinder(region.Index % _gridSize, region.Index / _gridSize)
+                );
+
+                foreach (PathFinder node in path)
+                {
+                    if (_grid[node.X, node.Y] == Color.SaddleBrown)
+                    {
+                        pathLength += 1;
+                    }
+                }
+
+                if (pathLength < ConnectingThreshold)
+                {
+                    _mergableRegion = region;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void CombineRegions(ContiguousRegion r1, ContiguousRegion r2)
+        {
+            var path = AStar.GeneratePath(
+                    new PathFinder(r1.Index % _gridSize, r1.Index / _gridSize),
+                    new PathFinder(r2.Index % _gridSize, r2.Index / _gridSize)
+                );
+
+            foreach (PathFinder node in path)
+            {
+                if (_grid[node.X, node.Y] == Color.Aquamarine) continue;
+                _grid[node.X, node.Y] = Color.Aquamarine;
+
+                var i = node.X;
+                var j = node.Y;
+
+                
+
+                for (var k = -TunnelSize; k <= TunnelSize; k++)
+                {
+                    for (var l = -TunnelSize; l <= TunnelSize; l++)
+                    {
+                        if (i + k < 0 || i + k >= _gridSize || j + l < 0 || j + l >= _gridSize || (k == 0 && l == 0)) continue;
+
+                         _grid[i + k, j + l] = _rng.NextDouble() < TunnelPersistance ? Color.Aquamarine : Color.Brown;
+                    }
+                }
+            }
+
+            _qu.Union(r1.Index, r2.Index);
+            _regions.Remove(r2);
+
+            picOutput.Refresh();
         }
 
         private void DrawBox(object sender, PaintEventArgs e)
@@ -165,23 +302,115 @@ namespace CellularAutomata
             }
         }
 
-        private void button3_Click(object sender, EventArgs e)
+        private void RejectIsolatedRegions()
         {
-            _timer.Enabled = false;
+            for (var i = 0; i < _gridSize; i++)
+            {
+                for (var j = 0; j < _gridSize; j++)
+                {
+                    if (_grid[i, j] == Color.SaddleBrown) continue;
+
+                    if (_qu.Find(i + j * _gridSize) != _mainRegion.Index) _grid[i, j] = Color.SaddleBrown;
+                }
+            }
+
         }
 
-        private void button2_Click(object sender, EventArgs e)
+        private void CalculateWater()
         {
-            StartAutomata();
+            var water = 0;
+            for(var i = 0; i < _gridSize; i++)
+            {
+                for (var j = 0; j < _gridSize; j++)
+                {
+                    if (_grid[i, j] == Color.Aquamarine) water++;
+                }
+            }
+
+            _water = water/(float) (_gridSize*_gridSize);
         }
 
-        private struct CaveRules
+        private void MarkAcceptance()
+        {
+            txtAccept.Text = (_water > WaterMinimum ? "Accepted!" : "Rejected!") + string.Format(" ({0}%)", _water * 100);
+        }
+
+        private class ContiguousRegion : IComparable<ContiguousRegion>
+        {
+            public int Index;
+            public int Size;
+
+            public int CompareTo(ContiguousRegion other)
+            {
+                return other.Size - Size;
+            }
+        }
+
+        private class CaveRules
         {
             public int GridSize;
             public int NeighborhoodSize;
             public int NeighborhoodThreshold;
             public int Iterations;
             public float Initialization;
+        }
+
+        public class PathFinder : IAStarNode
+        {
+            public readonly int X;
+            public readonly int Y;
+
+            public PathFinder(int i, int j)
+            {
+                X = i;
+                Y = j;
+            }
+
+            public override int GetHashCode()
+            {
+                return Y*_gridSize + X;
+            }
+
+            public override bool Equals(object obj)
+            {
+                if (!(obj is PathFinder)) return false;
+                return ((PathFinder) obj).X == X && ((PathFinder) obj).Y == Y;
+            }
+
+            public List<IAStarNode> GetNeighbors(){
+                var neighbors = new List<IAStarNode>();
+
+
+                for (var k = -1; k <= 1; k++)
+                {
+                    for (var l = -1; l <= 1; l++)
+                    {
+                        if (X + k < 0 || X + k >= _gridSize || Y + l < 0 || Y + l >= _gridSize || (k == 0 && l == 0)) continue;
+                        neighbors.Add(new PathFinder(X + k, Y + l));
+                    }
+                }
+
+                return neighbors;
+            }
+
+            public double EstimateDistance(IAStarNode end)
+            {
+                var pf = (PathFinder) end;
+
+                return Math.Abs(pf.X - X) + Math.Abs(pf.Y - Y);
+            }
+
+            public double Distance(IAStarNode destination)
+            {
+                var pf = (PathFinder) destination;
+
+                return _grid[pf.X, pf.Y] == Color.SaddleBrown ? 10 : 1;
+            }
+
+            public override string ToString()
+            {
+                return String.Format("{0}, {1}", X, Y);
+            }
         }
     }
 }

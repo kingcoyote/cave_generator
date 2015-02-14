@@ -35,6 +35,7 @@
             this.numSpeed = new System.Windows.Forms.NumericUpDown();
             this.groupBox2 = new System.Windows.Forms.GroupBox();
             this.picOutput = new System.Windows.Forms.PictureBox();
+            this.txtAccept = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.numSpeed)).BeginInit();
             this.groupBox2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.picOutput)).BeginInit();
@@ -71,6 +72,7 @@
             // 
             // groupBox1
             // 
+            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox1.Location = new System.Drawing.Point(463, 12);
             this.groupBox1.Name = "groupBox1";
             this.groupBox1.Size = new System.Drawing.Size(200, 262);
@@ -97,6 +99,7 @@
             // 
             // groupBox2
             // 
+            this.groupBox2.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox2.Controls.Add(this.numSpeed);
             this.groupBox2.Controls.Add(this.label4);
             this.groupBox2.Controls.Add(this.button4);
@@ -110,6 +113,9 @@
             // 
             // picOutput
             // 
+            this.picOutput.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.picOutput.Location = new System.Drawing.Point(12, 12);
             this.picOutput.Name = "picOutput";
             this.picOutput.Size = new System.Drawing.Size(445, 445);
@@ -117,11 +123,22 @@
             this.picOutput.TabStop = false;
             this.picOutput.Paint += new System.Windows.Forms.PaintEventHandler(this.DrawBox);
             // 
+            // txtAccept
+            // 
+            this.txtAccept.AutoSize = true;
+            this.txtAccept.Location = new System.Drawing.Point(556, 300);
+            this.txtAccept.Name = "txtAccept";
+            this.txtAccept.Size = new System.Drawing.Size(16, 13);
+            this.txtAccept.TabIndex = 11;
+            this.txtAccept.Text = "---";
+            this.txtAccept.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(675, 469);
+            this.Controls.Add(this.txtAccept);
             this.Controls.Add(this.picOutput);
             this.Controls.Add(this.groupBox2);
             this.Controls.Add(this.groupBox1);
@@ -132,6 +149,7 @@
             this.groupBox2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.picOutput)).EndInit();
             this.ResumeLayout(false);
+            this.PerformLayout();
 
         }
 
@@ -144,6 +162,7 @@
         private System.Windows.Forms.GroupBox groupBox2;
         private System.Windows.Forms.PictureBox picOutput;
         private System.Windows.Forms.NumericUpDown numSpeed;
+        private System.Windows.Forms.Label txtAccept;
     }
 }
 
