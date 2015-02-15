@@ -48,7 +48,7 @@ namespace CellularAutomata
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            dgvRules.Rows.Add(new object[] { "32", "3", "1", "3", "60" });
+            dgvRules.Rows.Add(new object[] { "32", "3", "1", "4", "60" });
             dgvRules.Rows.Add(new object[] { "256", "4", "2", "10", "50" });
         }
 

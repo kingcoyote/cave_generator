@@ -194,7 +194,7 @@
             this.numTunnelClearance.Size = new System.Drawing.Size(60, 20);
             this.numTunnelClearance.TabIndex = 17;
             this.numTunnelClearance.Value = new decimal(new int[] {
-            60,
+            70,
             0,
             0,
             0});
@@ -215,7 +215,7 @@
             this.numLocalThreshold.Size = new System.Drawing.Size(60, 20);
             this.numLocalThreshold.TabIndex = 23;
             this.numLocalThreshold.Value = new decimal(new int[] {
-            10,
+            9,
             0,
             0,
             0});
