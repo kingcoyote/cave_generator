@@ -1,11 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using Algorithms;
 
@@ -28,58 +23,136 @@ namespace CellularAutomata
         public int TunnelSize = 6;
         public float TunnelPersistance = 0.8f;
         public float WaterMinimum = 0.33f;
+        private float WaterMaximum = 0.40f;
+        private int _finalIterations = 1;
+        private int _finalNeighborhoodSize = 2;
+        private int _finalNeighborhoodThreshold = 8;
 
         private float _water;
-        private static Color[,] _grid = new Color[128,128];
+        private static Color[,] _grid;
         private static int _gridSize;
         private Random _rng;
-        private Timer _timer;
         private List<CaveRules> _rules;
-        private int _currentRule;
-        private int _currentPass;
         private QuickUnion _qu;
         private List<ContiguousRegion> _regions;
         private ContiguousRegion _mainRegion;
         private ContiguousRegion _mergableRegion;
-        
+
+        private static Color _wallColor = Color.SaddleBrown;
+        private static Color _airColor = Color.Aquamarine;
+
         public Form1()
         {
             InitializeComponent();
+        }
 
-            _rng = new Random((int)DateTime.Now.Ticks);
-            _timer = new Timer();
-            _timer.Enabled = false;
-            _timer.Tick += ContinueAutomata;
-            
-            _rules = new List<CaveRules>(2);
-            _rules.Add(new CaveRules { GridSize = 32, Iterations = 3, NeighborhoodSize = 1, NeighborhoodThreshold = 3, Initialization = 0.6f });
-            _rules.Add(new CaveRules { GridSize = 256, Iterations = 4, NeighborhoodSize = 2, NeighborhoodThreshold = 10, Initialization = 0.5f });
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            dgvRules.Rows.Add(new object[] { "32", "3", "1", "3", "60" });
+            dgvRules.Rows.Add(new object[] { "256", "4", "2", "10", "50" });
         }
 
         private void StartAutomata(object sender, EventArgs e)
         {
-            StartAutomata();
-            _timer.Interval = 1000 / (int) numSpeed.Value;
-            _timer.Enabled = true;
+            GenerateCave();
         }
         
-        private void StartAutomata()
+        private void GenerateCave()
         {
-            _grid = new Color[_rules[0].GridSize, _rules[0].GridSize];
-            _currentRule = 0;
-            _currentPass = 0;
+            button1.Enabled = false;
+            txtAccept.Text = "...";
 
-            for (var i = 0; i < _rules[0].GridSize; i++)
+            try
             {
-                for (var j = 0; j < _rules[0].GridSize; j++)
+                // initialize all rules
+                _rng = new Random((int) DateTime.Now.Ticks);
+
+                _rules = new List<CaveRules>(2);
+
+                for (var i = 0; i < dgvRules.Rows.Count - 1; i++)
                 {
-                    _grid[i, j] = Color.Aquamarine;
+                    _rules.Add(new CaveRules
+                                   {
+                                       GridSize = int.Parse(dgvRules[0, i].Value.ToString()),
+                                       Iterations = int.Parse(dgvRules[1, i].Value.ToString()),
+                                       NeighborhoodSize = int.Parse(dgvRules[2, i].Value.ToString()),
+                                       NeighborhoodThreshold = int.Parse(dgvRules[3, i].Value.ToString()),
+                                       Initialization = float.Parse(dgvRules[4, i].Value.ToString())/100
+                                   });
                 }
+
+                ConnectingThreshold = (int) numTunnelDistance.Value;
+                TunnelSize = (int) numTunnelWidth.Value;
+                TunnelPersistance = (int) numTunnelClearance.Value/100.0f;
+                WaterMinimum = (int) minimumOpen.Value/100.0f;
+                WaterMaximum = (int) maximumOpen.Value/100.0f;
+                _finalIterations = (int) numFinalIterations.Value;
+                _finalNeighborhoodSize = (int) numFinalSize.Value;
+                _finalNeighborhoodThreshold = (int) numLocalThreshold.Value;
+
+                // initialize the grid
+                _gridSize = _rules[0].GridSize;
+                _grid = new Color[_gridSize,_gridSize];
+                for (var i = 0; i < _rules[0].GridSize; i++)
+                {
+                    for (var j = 0; j < _rules[0].GridSize; j++)
+                    {
+                        _grid[i, j] = _airColor;
+                    }
+                }
+
+                // loop through the rules and passes
+                foreach (var rule in _rules)
+                {
+                    var mul = (float) (_gridSize)/(rule.GridSize);
+                    _gridSize = rule.GridSize;
+                    var newGrid = new Color[_gridSize,_gridSize];
+                    for (var i = 0; i < rule.GridSize; i++)
+                    {
+                        for (var j = 0; j < rule.GridSize; j++)
+                        {
+                            newGrid[i, j] = _grid[(int) (i*mul), (int) (j*mul)];
+                        }
+                    }
+
+                    _grid = newGrid;
+
+                    InitializeGrid(rule.GridSize, rule.Initialization);
+
+                    picOutput.Refresh();
+
+                    // run the CA rules for the set number of times
+                    for (var i = 0; i < rule.Iterations; i++)
+                    {
+                        _grid = RunCellularAutomata(_grid, rule.GridSize, rule.NeighborhoodSize,
+                                                    rule.NeighborhoodThreshold);
+
+                        picOutput.Refresh();
+                    }
+                }
+
+                DefineConnectedComponents();
+                SortContiguousRegions();
+                MergeNearbyRegions();
+                for (var i = 0; i < _finalIterations; i++)
+                {
+                    _grid = RunCellularAutomata(_grid, _gridSize, _finalNeighborhoodSize, _finalNeighborhoodThreshold);
+                    picOutput.Refresh();
+                }
+                DefineConnectedComponents();
+                SortContiguousRegions();
+                RejectIsolatedRegions();
+                CalculateWater();
+                MarkAcceptance();
+
+                picOutput.Refresh();
+            }
+            catch (Exception)
+            {
+                MessageBox.Show("An error occured while generating this cave. Try adjusting the rules.");
             }
 
-            InitializeGrid(_rules[0].GridSize, _rules[0].Initialization);
-
-            picOutput.Refresh();
+            button1.Enabled = true;
         }
 
         private void InitializeGrid(int gridSize, float threshold)
@@ -88,64 +161,14 @@ namespace CellularAutomata
             {
                 for (var j = 0; j < gridSize; j++)
                 {
-                    if (_grid[i, j] == Color.SaddleBrown) continue;
+                    if (_grid[i, j] == _wallColor) continue;
 
-                    _grid[i, j] = _rng.NextDouble() < threshold ? Color.SaddleBrown : Color.Aquamarine;
+                    _grid[i, j] = _rng.NextDouble() < threshold ? _airColor : _wallColor;
                 }
             }
         }
 
-        private void ContinueAutomata(object sender, EventArgs e)
-        {
-            ContinueAutomata();
-        }
-
-        private void ContinueAutomata()
-        {
-            if (_currentRule == _rules.Count - 1 && _currentPass >= _rules[_currentRule].Iterations) return;
-            if (_currentPass == _rules[_currentRule].Iterations)
-            {
-                _currentRule++;
-                _currentPass = 0;
-                var newGrid = new Color[_rules[_currentRule].GridSize, _rules[_currentRule].GridSize];
-                var mul = (float)(_rules[_currentRule - 1].GridSize)/(float)(_rules[_currentRule].GridSize);
-                for(var i = 0; i < _rules[_currentRule].GridSize; i++)
-                {
-                    for (var j = 0; j < _rules[_currentRule].GridSize; j++)
-                    {
-                        newGrid[i, j] = _grid[(int) (i*mul), (int) (j*mul)];
-                    }
-                }
-                
-                _grid = newGrid;
-
-                InitializeGrid(_rules[_currentRule].GridSize, _rules[_currentRule].Initialization);
-            }
-
-            _grid = GenerateGrid(_grid, _rules[_currentRule].GridSize, _rules[_currentRule].NeighborhoodSize,
-                                 _rules[_currentRule].NeighborhoodThreshold);
-
-            _currentPass++;
-
-            if (_currentRule == _rules.Count - 1 && _currentPass >= _rules[_currentRule].Iterations)
-            {
-                _gridSize = _rules[_currentRule].GridSize;
-                DefineConnectedComponents();
-                SortContiguousRegions();
-                MergeNearbyRegions();
-                _grid = GenerateGrid(_grid, _rules[_currentRule].GridSize, _rules[_currentRule].NeighborhoodSize,
-                                 _rules[_currentRule].NeighborhoodThreshold);
-                DefineConnectedComponents();
-                SortContiguousRegions();
-                RejectIsolatedRegions();
-                CalculateWater();
-                MarkAcceptance();
-            };
-            
-            picOutput.Refresh();
-        }
-
-        private Color[,] GenerateGrid(Color[,] oldGrid, int gridSize, int size, float threshold)
+        private Color[,] RunCellularAutomata(Color[,] oldGrid, int gridSize, int size, float threshold)
         {
             var newGrid = new Color[gridSize, gridSize];
             for (var i = 0; i < gridSize; i++)
@@ -159,11 +182,11 @@ namespace CellularAutomata
                         for (var l = -size; l <= size; l++)
                         {
                             if (i + k < 0 || i + k >= gridSize || j + l < 0 || j + l >= gridSize || (k == 0 && l == 0)) continue;
-                            if (_grid[i + k, j + l] == Color.Aquamarine) neighbors++;
+                            if (_grid[i + k, j + l] == _airColor) neighbors++;
                         }
                     }
 
-                    newGrid[i, j] = neighbors > threshold ? Color.Aquamarine : Color.SaddleBrown;
+                    newGrid[i, j] = neighbors > threshold ? _airColor : _wallColor;
                 }
             }
             return newGrid;
@@ -171,20 +194,20 @@ namespace CellularAutomata
 
         private void DefineConnectedComponents()
         {
-            var gridSize = _rules[_currentRule].GridSize;
-            _qu = new QuickUnion(gridSize*gridSize);
-            for (var i = 0; i < gridSize; i++)
+
+            _qu = new QuickUnion(_gridSize*_gridSize);
+            for (var i = 0; i < _gridSize; i++)
             {
-                for (var j = 0; j < gridSize; j++)
+                for (var j = 0; j < _gridSize; j++)
                 {
-                    if (_grid[i, j] == Color.SaddleBrown) continue;
+                    if (_grid[i, j] == _wallColor) continue;
 
                     for (var k = -1; k <= 1; k++)
                     {
                         for (var l = -1; l <= 1; l++)
                         {
-                            if (i + k < 0 || i + k >= gridSize || j + l < 0 || j + l >= gridSize || (k == 0 && l == 0)) continue;
-                            if (_grid[i + k, j + l] == Color.Aquamarine) _qu.Union(j*gridSize + i, (j+l) * gridSize + i+k);
+                            if (i + k < 0 || i + k >= _gridSize || j + l < 0 || j + l >= _gridSize || (k == 0 && l == 0)) continue;
+                            if (_grid[i + k, j + l] == _airColor) _qu.Union(j * _gridSize + i, (j + l) * _gridSize + i + k);
                         }
                     }
                 }
@@ -193,12 +216,11 @@ namespace CellularAutomata
 
         private void SortContiguousRegions()
         {
-            var gridSize = _rules[_currentRule].GridSize;
             var r = new Dictionary<int, ContiguousRegion>();
 
-            for (var i = 0; i < gridSize * gridSize; i++)
+            for (var i = 0; i < _gridSize * _gridSize; i++)
             {
-                if (r.ContainsKey(_qu.Find(i)) || _grid[i % 256, i / gridSize] == Color.SaddleBrown) continue;
+                if (r.ContainsKey(_qu.Find(i)) || _grid[i % 256, i / _gridSize] == _wallColor) continue;
                 r.Add(_qu.Find(i), new ContiguousRegion() { Index = _qu.Find(i), Size = _qu.Size(i) });
             }
 
@@ -239,7 +261,7 @@ namespace CellularAutomata
 
                 foreach (PathFinder node in path)
                 {
-                    if (_grid[node.X, node.Y] == Color.SaddleBrown)
+                    if (_grid[node.X, node.Y] == _wallColor)
                     {
                         pathLength += 1;
                     }
@@ -264,8 +286,8 @@ namespace CellularAutomata
 
             foreach (PathFinder node in path)
             {
-                if (_grid[node.X, node.Y] == Color.Aquamarine) continue;
-                _grid[node.X, node.Y] = Color.Aquamarine;
+                if (_grid[node.X, node.Y] == _airColor) continue;
+                _grid[node.X, node.Y] = _airColor;
 
                 var i = node.X;
                 var j = node.Y;
@@ -278,7 +300,7 @@ namespace CellularAutomata
                     {
                         if (i + k < 0 || i + k >= _gridSize || j + l < 0 || j + l >= _gridSize || (k == 0 && l == 0)) continue;
 
-                         _grid[i + k, j + l] = _rng.NextDouble() < TunnelPersistance ? Color.Aquamarine : Color.Brown;
+                        _grid[i + k, j + l] = _rng.NextDouble() < TunnelPersistance ? _airColor : _wallColor;
                     }
                 }
             }
@@ -291,10 +313,10 @@ namespace CellularAutomata
 
         private void DrawBox(object sender, PaintEventArgs e)
         {
-            var cellSize = (float)(picOutput.Width)/_rules[_currentRule].GridSize;
-            for (var i = 0; i < _rules[_currentRule].GridSize; i++)
+            var cellSize = (float)(picOutput.Width)/_gridSize;
+            for (var i = 0; i < _gridSize; i++)
             {
-                for (var j = 0; j < _rules[_currentRule].GridSize; j++)
+                for (var j = 0; j < _gridSize; j++)
                 {
                     var p = new SolidBrush(_grid[i, j]);
                     e.Graphics.FillRectangle(p, i*cellSize, j*cellSize, cellSize, cellSize);
@@ -308,9 +330,9 @@ namespace CellularAutomata
             {
                 for (var j = 0; j < _gridSize; j++)
                 {
-                    if (_grid[i, j] == Color.SaddleBrown) continue;
+                    if (_grid[i, j] == _wallColor) continue;
 
-                    if (_qu.Find(i + j * _gridSize) != _mainRegion.Index) _grid[i, j] = Color.SaddleBrown;
+                    if (_qu.Find(i + j * _gridSize) != _mainRegion.Index) _grid[i, j] = _wallColor;
                 }
             }
 
@@ -323,7 +345,7 @@ namespace CellularAutomata
             {
                 for (var j = 0; j < _gridSize; j++)
                 {
-                    if (_grid[i, j] == Color.Aquamarine) water++;
+                    if (_grid[i, j] == _airColor) water++;
                 }
             }
 
@@ -332,7 +354,7 @@ namespace CellularAutomata
 
         private void MarkAcceptance()
         {
-            txtAccept.Text = (_water > WaterMinimum ? "Accepted!" : "Rejected!") + string.Format(" ({0}%)", _water * 100);
+            txtAccept.Text = (_water >= WaterMinimum && _water <= WaterMaximum ? "Accepted!" : "Rejected!") + string.Format(" ({0}%)", _water * 100);
         }
 
         private class ContiguousRegion : IComparable<ContiguousRegion>
@@ -404,7 +426,7 @@ namespace CellularAutomata
             {
                 var pf = (PathFinder) destination;
 
-                return _grid[pf.X, pf.Y] == Color.SaddleBrown ? 10 : 1;
+                return _grid[pf.X, pf.Y] == _wallColor ? 10 : 1;
             }
 
             public override string ToString()
