@@ -44,6 +44,14 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Algorithms\AStar.cs" />
+    <Compile Include="Algorithms\CC.cs" />
+    <Compile Include="Algorithms\FlowEdge.cs" />
+    <Compile Include="Algorithms\FlowNetwork.cs" />
+    <Compile Include="Algorithms\FordFulkerson.cs" />
+    <Compile Include="Algorithms\Graph.cs" />
+    <Compile Include="Algorithms\PriorityQueue.cs" />
+    <Compile Include="Algorithms\QuickUnion.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -77,12 +85,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Algorithms\Algorithms.csproj">
-      <Project>{e999eb2d-e54b-431f-9520-99d2e8ca4899}</Project>
-      <Name>Algorithms</Name>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
