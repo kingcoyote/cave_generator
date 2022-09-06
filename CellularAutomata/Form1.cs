@@ -120,6 +120,7 @@ namespace CellularAutomata
                     InitializeGrid(rule.GridSize, rule.Initialization);
 
                     picOutput.Refresh();
+                    System.Threading.Thread.Sleep(100);
 
                     // run the CA rules for the set number of times
                     for (var i = 0; i < rule.Iterations; i++)
@@ -128,6 +129,7 @@ namespace CellularAutomata
                                                     rule.NeighborhoodThreshold);
 
                         picOutput.Refresh();
+                        System.Threading.Thread.Sleep(100);
                     }
                 }
 
@@ -138,6 +140,7 @@ namespace CellularAutomata
                 {
                     _grid = RunCellularAutomata(_grid, _gridSize, _finalNeighborhoodSize, _finalNeighborhoodThreshold);
                     picOutput.Refresh();
+                    System.Threading.Thread.Sleep(100);
                 }
                 DefineConnectedComponents();
                 SortContiguousRegions();
@@ -146,6 +149,7 @@ namespace CellularAutomata
                 MarkAcceptance();
 
                 picOutput.Refresh();
+                System.Threading.Thread.Sleep(100);
             }
             catch (Exception)
             {
