@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
@@ -224,7 +224,7 @@ namespace CellularAutomata
 
             for (var i = 0; i < _gridSize * _gridSize; i++)
             {
-                if (r.ContainsKey(_qu.Find(i)) || _grid[i % 256, i / _gridSize] == _wallColor) continue;
+                if (r.ContainsKey(_qu.Find(i)) || _grid[i % _gridSize, i / _gridSize] == _wallColor) continue;
                 r.Add(_qu.Find(i), new ContiguousRegion() { Index = _qu.Find(i), Size = _qu.Size(i) });
             }
 
@@ -232,6 +232,7 @@ namespace CellularAutomata
 
             foreach (var cr in r.Values)
             {
+                cr.Size = _qu.Size(cr.Index);
                 pq.Insert(cr);
             }
 
